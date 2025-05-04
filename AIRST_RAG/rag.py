@@ -3,7 +3,7 @@ import uuid
 import json
 import requests
 
-# Prevent torch._classes scanning errors by replacing _classes with a benign namespace
+# Ensure torch._classes is initialized to avoid AttributeError in some environments
 import torch
 import types
 if hasattr(torch, "_classes"):
@@ -16,7 +16,7 @@ from pathlib import Path
 import fitz  # PyMuPDF for PDF extraction
 from docx import Document  # for DOCX extraction
 
-# Try importing pdfplumber for improved table extraction
+# Importing pdfplumber for improved table extraction
 try:
     import pdfplumber
     USE_PDFPLUMBER = True
@@ -205,8 +205,8 @@ def main():
     if "processed_files" not in st.session_state:
         st.session_state["processed_files"] = load_processed_files()
 
-    # Create three tabs: File Upload, PDFs/Docs list, and Prompt for Q&A.
-    tab_upload, tab_list, tab_prompt = st.tabs(["File Upload", "PDFs/Docs", "Prompt"])
+    # Tabs: File Upload, PDFs/Docs list, and Prompt for Q&A.
+    tab_upload, tab_list, tab_prompt, tab_chat = st.tabs(["File Upload", "PDFs/Docs", "Prompt","Upload & Chat"])
     
     with tab_upload:
         st.header("Upload Research Papers")
@@ -256,6 +256,42 @@ def main():
                     st.write(answer)
             else:
                 st.warning("Please enter a question.")
+    with tab_chat:
+        st.header("Upload & Chat with PDF")
+        chat_uploaded_file = st.file_uploader(
+            "Upload a PDF file for summarization and chat (file will not be stored):",
+            type=["pdf"]
+        )
+        if chat_uploaded_file:
+            # Extract text from the uploaded PDF
+            temp_file_path = os.path.join(UPLOAD_DIR, f"temp_{uuid.uuid4().hex}.pdf")
+            with open(temp_file_path, "wb") as temp_file:
+                temp_file.write(chat_uploaded_file.getbuffer())
+            
+            # Extract text and summarize
+            extracted_text = extract_text_from_pdf(temp_file_path)
+            os.remove(temp_file_path)  # Delete the temporary file immediately
+            
+            if not extracted_text.strip():
+                st.warning("No text could be extracted from the uploaded PDF.")
+            else:
+                chunks = chunk_text_improved(extracted_text)
+                summary = call_llm(" ".join(chunks[:3]), "Summarize the content.")
+                st.subheader("Summary")
+                st.write(summary)
+                
+                #Chat with the PDF
+                st.subheader("Chat with the PDF")
+                chat_query = st.text_input("Ask a question about the uploaded PDF:")
+                if st.button("Get Answer", key="chat_pdf"):
+                    if chat_query:
+                        context = "\n\n".join(chunks[:5])  # Use the first few chunks as context
+                        answer = call_llm(context, chat_query)
+                        print(f'Answer: {answer}')
+                        st.write("**Answer:**")
+                        st.write(answer)
+                    else:
+                        st.warning("Please enter a question.")
 
 if __name__ == "__main__":
     main()
