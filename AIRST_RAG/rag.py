@@ -206,7 +206,7 @@ def main():
         st.session_state["processed_files"] = load_processed_files()
 
     # Tabs: File Upload, PDFs/Docs list, and Prompt for Q&A.
-    tab_upload, tab_list, tab_prompt, tab_chat = st.tabs(["File Upload", "PDFs/Docs", "Prompt","Upload & Chat"])
+    tab_upload, tab_list, tab_prompt, tab_chat = st.tabs(["File Upload", "PDFs/Docs", "Ask Anything","Upload & Chat"])
     
     with tab_upload:
         st.header("Upload Research Papers")
