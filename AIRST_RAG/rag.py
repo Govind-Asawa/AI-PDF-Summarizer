@@ -258,11 +258,23 @@ def main():
                 st.warning("Please enter a question.")
     with tab_chat:
         st.header("Upload & Chat with PDF")
+        # File uploader for chat
         chat_uploaded_file = st.file_uploader(
             "Upload a PDF file for summarization and chat (file will not be stored):",
             type=["pdf"]
         )
-        if chat_uploaded_file:
+        # Store extracted chunks and summary to avoid reprocessing
+        if "chat_chunks" not in st.session_state:
+            st.session_state["chat_chunks"] = None
+        if "chat_summary" not in st.session_state:
+            st.session_state["chat_summary"] = None
+        if "uploaded_file" not in st.session_state:
+            st.session_state["uploaded_file"] = None
+
+        if chat_uploaded_file and chat_uploaded_file.name != st.session_state["uploaded_file"]:
+            print(f"Processing uploaded file: {chat_uploaded_file.name}")
+            st.session_state["uploaded_file"] = chat_uploaded_file.name
+
             # Extract text from the uploaded PDF
             temp_file_path = os.path.join(UPLOAD_DIR, f"temp_{uuid.uuid4().hex}.pdf")
             with open(temp_file_path, "wb") as temp_file:
@@ -275,23 +287,30 @@ def main():
             if not extracted_text.strip():
                 st.warning("No text could be extracted from the uploaded PDF.")
             else:
+                # Process chunks and summary for the new file
                 chunks = chunk_text_improved(extracted_text)
-                summary = call_llm(" ".join(chunks[:3]), "Summarize the content.")
-                st.subheader("Summary")
-                st.write(summary)
-                
-                #Chat with the PDF
-                st.subheader("Chat with the PDF")
-                chat_query = st.text_input("Ask a question about the uploaded PDF:")
-                if st.button("Get Answer", key="chat_pdf"):
-                    if chat_query:
-                        context = "\n\n".join(chunks[:5])  # Use the first few chunks as context
-                        answer = call_llm(context, chat_query)
-                        print(f'Answer: {answer}')
-                        st.write("**Answer:**")
-                        st.write(answer)
-                    else:
-                        st.warning("Please enter a question.")
+                st.session_state["chat_chunks"] = chunks
+                st.session_state["chat_summary"] = call_llm(" ".join(chunks[:3]), "Summarize the content.")
 
+                # Display the summary
+                st.subheader("Summary")
+                st.write(st.session_state["chat_summary"])
+        else:
+            # Display the summary
+            st.subheader("Summary")
+            st.write(st.session_state["chat_summary"])
+
+        # Chat functionality
+        if st.session_state.get("chat_chunks"):
+            st.subheader("Chat with the PDF")
+            chat_query = st.text_input("Ask a question about the uploaded PDF:")
+            if st.button("Get Answer", key="chat_pdf"):
+                if chat_query:
+                    context = "\n\n".join(st.session_state["chat_summary"])  # Use the first 5 chunks as context
+                    answer = call_llm(context, chat_query)
+                    st.write("**Answer:**")
+                    st.write(answer)
+                else:
+                    st.warning("Please enter a question.")
 if __name__ == "__main__":
     main()
